@@ -1,0 +1,63 @@
+name: Trigger auto deployment for container-app-d64mfxsrv4zq6
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '.devcontainer/**'
+    - '.github/workflows/container-app-d64mfxsrv4zq6-AutoDeployTrigger-467533af-3e5f-4d50-b127-5f2d09895f34.yml'
+
+  # Allow mannually trigger 
+  workflow_dispatch:      
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Log in to container registry
+        uses: docker/login-action@v1
+        with:
+          registry: containerregistryd64mfxsrv4zq6.azurecr.io
+          username: ${{ secrets.CONTAINERAPPD64MFXSRV4ZQ6_REGISTRY_USERNAME }}
+          password: ${{ secrets.CONTAINERAPPD64MFXSRV4ZQ6_REGISTRY_PASSWORD }}
+
+      - name: Build and push container image to registry
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: containerregistryd64mfxsrv4zq6.azurecr.io/container-app-d64mfxsrv4zq6:${{ github.sha }}
+          file: ./.devcontainer/Dockerfile
+          context: ./.devcontainer/
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.CONTAINERAPPD64MFXSRV4ZQ6_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.CONTAINERAPPD64MFXSRV4ZQ6_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.CONTAINERAPPD64MFXSRV4ZQ6_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to containerapp
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az config set extension.use_dynamic_install=yes_without_prompt
+            az containerapp registry set -n container-app-d64mfxsrv4zq6 -g todopythonmongoterraformwoadff --server containerregistryd64mfxsrv4zq6.azurecr.io --username  ${{ secrets.CONTAINERAPPD64MFXSRV4ZQ6_REGISTRY_USERNAME }} --password ${{ secrets.CONTAINERAPPD64MFXSRV4ZQ6_REGISTRY_PASSWORD }}
+            az containerapp update -n container-app-d64mfxsrv4zq6 -g todopythonmongoterraformwoadff --image containerregistryd64mfxsrv4zq6.azurecr.io/container-app-d64mfxsrv4zq6:${{ github.sha }}
